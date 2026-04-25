@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 # Force install packages
-subprocess.check_call([sys.executable, "-m", "pip", "install", "gspread", "google-auth"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "gspread", "google-auth"])
 
 import streamlit as st
 import json
