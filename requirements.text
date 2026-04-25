@@ -1,4 +1,4 @@
-streamlit
-colorama
-gspread
-google-auth
+streamlit==1.39.0
+colorama==0.4.6
+gspread==6.1.4
+google-auth==2.36.0
