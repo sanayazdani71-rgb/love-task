@@ -1,0 +1,7 @@
+tasks.json
+love-task-494410-957a5f6d8c5e.json
+__pycache__/
+dist/
+build/
+*.spec
+*.exe
