@@ -1,7 +1,15 @@
+import subprocess
+import sys
+
+# Force install packages
+subprocess.check_call([sys.executable, "-m", "pip", "install", "gspread", "google-auth"])
+
 import streamlit as st
 import json
 import random
 import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
