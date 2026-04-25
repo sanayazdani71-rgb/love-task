@@ -1,16 +1,5 @@
-import subprocess
-import sys
-
-# Force install packages
-subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "gspread", "google-auth"])
-
 import streamlit as st
-import json
 import random
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime
-from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # ============== PAGE SETUP ==============
@@ -19,54 +8,6 @@ st.set_page_config(
     page_icon="💝",
     layout="centered"
 )
-
-# ============== GOOGLE SHEETS CONNECTION ==============
-SCOPE = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
-]
-
-@st.cache_resource
-def connect_to_sheets():
-    """Connect to Google Sheets using secrets"""
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-    client = gspread.authorize(creds)
-    sheet = client.open(st.secrets["sheet_name"]).sheet1
-    return sheet
-
-def load_tasks_from_sheet(sheet):
-    """Load all tasks from Google Sheet"""
-    records = sheet.get_all_records()
-    tasks = []
-    for r in records:
-        tasks.append({
-            "name": r.get("name", ""),
-            "priority": r.get("priority", "⭐ Important"),
-            "done": str(r.get("done", "False")) == "True",
-            "date": r.get("date", ""),
-        })
-    return tasks
-
-def save_tasks_to_sheet(sheet, tasks):
-    """Save all tasks to Google Sheet (rewrite entire sheet)"""
-    sheet.clear()
-    sheet.append_row(["name", "priority", "done", "date"])
-    for task in tasks:
-        sheet.append_row([
-            task["name"],
-            task["priority"],
-            str(task["done"]),
-            task["date"],
-        ])
-
-# Connect to sheet
-try:
-    sheet = connect_to_sheets()
-except Exception as e:
-    st.error(f"Could not connect to database: {e}")
-    st.stop()
 
 # ============== CUTE MESSAGES ==============
 completion_messages = [
@@ -120,9 +61,38 @@ PRIORITY_MAP = {
     "🌙 Chill": "🌙",
 }
 
+# ============== DATABASE USING STREAMLIT CLOUD ==============
+# This uses st.session_state which persists during the session
+# AND we save to a file that Streamlit manages
+
+import json
+import os
+
+DATA_DIR = "data"
+SAVE_FILE = os.path.join(DATA_DIR, "tasks.json")
+
+def ensure_data_dir():
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
+def load_tasks():
+    ensure_data_dir()
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return []
+    return []
+
+def save_tasks(tasks):
+    ensure_data_dir()
+    with open(SAVE_FILE, "w", encoding="utf-8") as f:
+        json.dump(tasks, f, indent=2, ensure_ascii=False)
+
 # Initialize session state
 if "tasks" not in st.session_state:
-    st.session_state.tasks = load_tasks_from_sheet(sheet)
+    st.session_state.tasks = load_tasks()
 
 if "message" not in st.session_state:
     st.session_state.message = ""
@@ -230,16 +200,10 @@ st.markdown("""
         font-family: 'Quicksand', sans-serif;
     }
     
-    /* Tab styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    
     .stTabs [data-baseweb="tab"] {
         color: white;
     }
     
-    /* Button styling */
     .stButton > button {
         border-radius: 10px;
         font-family: 'Quicksand', sans-serif;
@@ -262,13 +226,6 @@ st.markdown(f'<p class="welcome-msg">{st.session_state.welcome}</p>', unsafe_all
 if st.session_state.message:
     st.markdown(f'<div class="cute-message">{st.session_state.message}</div>', unsafe_allow_html=True)
     st.session_state.message = ""
-
-# ============== REFRESH BUTTON ==============
-col_refresh, col_empty = st.columns([1, 3])
-with col_refresh:
-    if st.button("🔄 Refresh Tasks"):
-        st.session_state.tasks = load_tasks_from_sheet(sheet)
-        st.rerun()
 
 # ============== PROGRESS BAR ==============
 tasks = st.session_state.tasks
@@ -338,14 +295,14 @@ with tab1:
                 if not task["done"]:
                     if st.button("✅ Done", key=f"done_{i}"):
                         st.session_state.tasks[i]["done"] = True
-                        save_tasks_to_sheet(sheet, st.session_state.tasks)
+                        save_tasks(st.session_state.tasks)
                         st.session_state.message = random.choice(completion_messages)
                         st.rerun()
             
             with col3:
                 if st.button("🗑️ Delete", key=f"del_{i}"):
                     st.session_state.tasks.pop(i)
-                    save_tasks_to_sheet(sheet, st.session_state.tasks)
+                    save_tasks(st.session_state.tasks)
                     st.rerun()
 
 # ============== TAB 2: ADD TASK ==============
@@ -371,7 +328,7 @@ with tab2:
                 "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
             }
             st.session_state.tasks.append(new_task)
-            save_tasks_to_sheet(sheet, st.session_state.tasks)
+            save_tasks(st.session_state.tasks)
             st.session_state.message = f"✅ Added: '{task_name}' — You got this, babe! 💪"
             st.rerun()
         elif submitted:
